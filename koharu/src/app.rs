@@ -384,12 +384,9 @@ pub async fn run() -> Result<()> {
     }
 
     let initial_runtime = load_runtime(cpu)?;
-    let listener = TcpListener::bind(format!(
-        "{}:{}",
-        host.unwrap_or("127.0.0.1".to_string()),
-        port.unwrap_or(0)
-    ))
-    .await?;
+    let bind_host = host.as_deref().unwrap_or("127.0.0.1");
+    let bind_port = port.unwrap_or(0);
+    let listener = TcpListener::bind((bind_host, bind_port)).await?;
     let api_port = listener.local_addr()?.port();
     let resources = Arc::new(tokio::sync::OnceCell::new());
     let (runtime_tx, runtime_rx) = watch::channel(initial_runtime.clone());
