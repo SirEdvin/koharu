@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use crate::Runtime;
 use crate::archive::{self, ExtractPolicy};
@@ -56,15 +56,16 @@ impl LlamaDistribution {
         }
     }
 
-    fn assets(self) -> &'static [&'static str] {
+    fn assets(self) -> Vec<String> {
+        let tag = LLAMA_CPP_TAG;
         match self {
-            Self::WindowsCuda13X64 => &[
-                "llama-b8233-bin-win-cuda-13.1-x64.zip",
-                "cudart-llama-bin-win-cuda-13.1-x64.zip",
+            Self::WindowsCuda13X64 => vec![
+                format!("llama-{tag}-bin-win-cuda-13.1-x64.zip"),
+                "cudart-llama-bin-win-cuda-13.1-x64.zip".to_string(),
             ],
-            Self::WindowsVulkanX64 => &["llama-b8233-bin-win-vulkan-x64.zip"],
-            Self::LinuxVulkanX64 => &["llama-b8233-bin-ubuntu-vulkan-x64.tar.gz"],
-            Self::MacosArm64 => &["llama-b8233-bin-macos-arm64.tar.gz"],
+            Self::WindowsVulkanX64 => vec![format!("llama-{tag}-bin-win-vulkan-x64.zip")],
+            Self::LinuxVulkanX64 => vec![format!("llama-{tag}-bin-ubuntu-vulkan-x64.tar.gz")],
+            Self::MacosArm64 => vec![format!("llama-{tag}-bin-macos-arm64.tar.gz")],
         }
     }
 
@@ -156,8 +157,9 @@ impl LlamaDistribution {
 
     fn install_dir(self, runtime: &Runtime) -> PathBuf {
         runtime
-            .layout()
-            .runtime_package_dir("llama.cpp")
+            .root()
+            .join("runtime")
+            .join("llama.cpp")
             .join(LLAMA_CPP_TAG)
             .join(self.id())
     }
@@ -199,9 +201,13 @@ pub(crate) async fn ensure_ready(runtime: &Runtime) -> Result<()> {
     if !install.is_current() {
         install.reset()?;
 
-        for asset in distribution.assets() {
+        for asset in &distribution.assets() {
             let url = format!("{RELEASE_BASE_URL}/{LLAMA_CPP_TAG}/{asset}");
-            let archive = archive::fetch(runtime, &url, asset).await?;
+            let archive = runtime
+                .downloads()
+                .cached_download(&url, asset)
+                .await
+                .with_context(|| format!("failed to download `{url}`"))?;
             let kind = archive::detect_kind(asset)?;
             archive::extract(
                 &archive,
@@ -265,11 +271,7 @@ mod tests {
 
     #[test]
     fn install_dir_includes_tag_and_id() {
-        let runtime = Runtime::new(
-            crate::Settings::from_paths("/tmp/rt", "/tmp/models"),
-            crate::ComputePolicy::CpuOnly,
-        )
-        .unwrap();
+        let runtime = Runtime::new("/tmp/koharu-runtime", crate::ComputePolicy::CpuOnly).unwrap();
         let dir = LlamaDistribution::WindowsVulkanX64.install_dir(&runtime);
         assert!(
             dir.ends_with(
