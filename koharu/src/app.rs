@@ -21,7 +21,10 @@ struct Cli {
     cpu: bool,
     #[arg(short, long, value_name = "PORT", help = "Bind to a specific port")]
     port: Option<u16>,
-    #[arg(long,help = "Bind the HTTP service to a specific host instead of 127.0.0.1")]
+    #[arg(
+        long,
+        help = "Bind the HTTP service to a specific host instead of 127.0.0.1"
+    )]
     host: Option<String>,
     #[arg(long, help = "Run without GUI")]
     headless: bool,
